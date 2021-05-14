@@ -1,12 +1,15 @@
 #include <uWS/uWS.h>
+
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
+
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "helpers.h"
 #include "json.hpp"
+#include "spline.h"
 
 // for convenience
 using nlohmann::json;
@@ -50,25 +53,24 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy]
-              (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-               uWS::OpCode opCode) {
+  h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
+               &map_waypoints_dx,
+               &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data,
+                                  size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
-
       auto s = hasData(data);
 
       if (s != "") {
         auto j = json::parse(s);
-        
+
         string event = j[0].get<string>();
-        
+
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          
+
           // Main car's localization Data
           double car_x = j[1]["x"];
           double car_y = j[1]["y"];
@@ -80,11 +82,11 @@ int main() {
           // Previous path data given to the Planner
           auto previous_path_x = j[1]["previous_path_x"];
           auto previous_path_y = j[1]["previous_path_y"];
-          // Previous path's end s and d values 
+          // Previous path's end s and d values
           double end_path_s = j[1]["end_path_s"];
           double end_path_d = j[1]["end_path_d"];
 
-          // Sensor Fusion Data, a list of all other cars on the same side 
+          // Sensor Fusion Data, a list of all other cars on the same side
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
 
@@ -97,12 +99,44 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
-
+          unsigned int previous_path_size = previous_path_x.size();
+          // find 5 points to create spline
+          vector<double> Xs;
+          vector<double> Ys;
+          if (previous_path_size > 2) {
+            // add X[-2], Y[-2]
+            Xs.push_back(previous_path_x[previous_path_size - 2]);
+            Ys.push_back(previous_path_y[previous_path_size - 2]);
+            // add X[-1], Y[-1]
+            Xs.push_back(previous_path_x[previous_path_size - 1]);
+            Ys.push_back(previous_path_y[previous_path_size - 1]);
+          } else {
+            Xs.push_back(car_x);
+            Ys.push_back(car_y);
+          }
+          // rest point using map waypoints
+          int map_index = ClosestWaypoint(Xs.back(), Ys.back(), map_waypoints_x,
+                                          map_waypoints_y);
+          for (unsigned int i = 0; i < 5 - Xs.size(); ++i) {
+            Xs.push_back(map_waypoints_x[map_index + i]);
+            Ys.push_back(map_waypoints_y[map_index + i]);
+          }
+          // transfer to local coordinate
+          for (unsigned int i = 0; i < Xs.size(); ++i) {
+            pose transformed_pose;
+            transformed_pose =
+                homogenousTransform(car_x, car_y, -car_yaw, Xs[i], Ys[i]);
+            Xs[i] = transformed_pose.x;
+            Ys[i] = transformed_pose.y;
+          }
+          // create spline
+          tk::spline s(Xs, Ys);
+          // find corresponded y in spline
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
-          auto msg = "42[\"control\","+ msgJson.dump()+"]";
+          auto msg = "42[\"control\"," + msgJson.dump() + "]";
 
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }  // end "telemetry" if
@@ -112,7 +146,7 @@ int main() {
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
       }
     }  // end websocket if
-  }); // end h.onMessage
+  });  // end h.onMessage
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
@@ -131,6 +165,19 @@ int main() {
     std::cerr << "Failed to listen to port" << std::endl;
     return -1;
   }
-  
+
   h.run();
+}
+
+struct pose {
+  double x;
+  double y;
+};
+
+pose homogenousTransform(double origin_x, double origin_y, double theta,
+                         double obj_x, double obj_y) {
+  pose target_frame;
+  target_frame.x = origin_x + cos(theta) * obj_x - sin(theta) * obj_y;
+  target_frame.y = origin_y + sin(theta) * obj_x + cos(theta) * obj_y;
+  return target_frame;
 }
