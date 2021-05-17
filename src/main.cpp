@@ -116,7 +116,7 @@ int main() {
           // find 5 points to create spline
           vector<double> Xs;
           vector<double> Ys;
-          if (previous_path_size > 2) {
+          if (previous_path_size >= 2) {
             // add X[-2], Y[-2]
             Xs.push_back(previous_path_x[previous_path_size - 2]);
             Ys.push_back(previous_path_y[previous_path_size - 2]);
@@ -158,12 +158,18 @@ int main() {
           tk::spline s(Xs, Ys);
           // find corresponded y in spline
           // 50 MPH for 0.02 second is 0.447 meter
-          double spline_dist = distance(Xs[1], Ys[1], 30.0, s.(30.0));
+          double spline_dist = distance(Xs[1], Ys[1], 30.0, s(30.0));
           double x_delta = 30.0 / (spline_dist / 0.447);
           // fill next path positions
+          double next_x, next_y;
+          if(previous_path_size<2){
+            next_x = Xs[0]; // use current position
+          } else {
+            next_x = Xs[1];
+          }
           for (unsigned int i = 1; i <= 50 - previous_path_size; ++i) {
-            double next_x = Xs[1] + x_delta * i;
-            double next_y = s(next_x);
+            next_x += x_delta * i;
+            next_y = s(next_x);
             // transfer from local coordinate to map coordinate
             pose map_pose = homogenousTransform(
                 -car_x, -car_y, deg2rad(-car_yaw), next_x, next_y);
