@@ -16,6 +16,19 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
+struct pose {
+  double x;
+  double y;
+};
+
+pose homogenousTransform(double origin_x, double origin_y, double theta,
+                         double obj_x, double obj_y) {
+  pose target_frame;
+  target_frame.x = origin_x + cos(theta) * obj_x - sin(theta) * obj_y;
+  target_frame.y = origin_y + sin(theta) * obj_x + cos(theta) * obj_y;
+  return target_frame;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -192,17 +205,4 @@ int main() {
   }
 
   h.run();
-}
-
-struct pose {
-  double x;
-  double y;
-};
-
-pose homogenousTransform(double origin_x, double origin_y, double theta,
-                         double obj_x, double obj_y) {
-  pose target_frame;
-  target_frame.x = origin_x + cos(theta) * obj_x - sin(theta) * obj_y;
-  target_frame.y = origin_y + sin(theta) * obj_x + cos(theta) * obj_y;
-  return target_frame;
 }
