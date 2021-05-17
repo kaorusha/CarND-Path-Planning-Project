@@ -29,6 +29,14 @@ pose homogenousTransform(double origin_x, double origin_y, double theta,
   return target_frame;
 }
 
+void printVector(const string msg, const vector<double> &v) {
+  std::cout << msg;
+  for (unsigned int i = 0; i < v.size(); ++i) {
+    std::cout << v[i] << ", ";
+  }
+  std::cout << std::endl;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -112,71 +120,74 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
+          std::cout << "x,y,yaw, s, d, speed=" << car_x << ", " << car_y << ", "
+                    << car_yaw << ", " << car_s << ", " << car_d << ", "
+                    << car_speed << std::endl;
+          // define target lane = 0, 1, 2
+          int target_lane = 1;
           unsigned int previous_path_size = previous_path_x.size();
           // find 5 points to create spline
-          vector<double> Xs;
-          vector<double> Ys;
+          vector<double> Xs, Ys;
+          // the heading at the end of previous path
+          double yaw_rad;
           if (previous_path_size >= 2) {
             // add X[-2], Y[-2]
+            std::cout << "previous_path_size >= 2" << std::endl;
             Xs.push_back(previous_path_x[previous_path_size - 2]);
             Ys.push_back(previous_path_y[previous_path_size - 2]);
             // add X[-1], Y[-1]
             Xs.push_back(previous_path_x[previous_path_size - 1]);
             Ys.push_back(previous_path_y[previous_path_size - 1]);
+            // calculate yaw
+            yaw_rad = atan2(Ys[1] - Ys[0], Xs[1] - Xs[0]);
           } else {
+            // create a fake previous point
+            std::cout << "previous_path_size less than 2" << std::endl;
+            Xs.push_back(car_x - cos(deg2rad(car_yaw)));
             Xs.push_back(car_x);
+            Ys.push_back(car_y - sin(deg2rad(car_yaw)));
             Ys.push_back(car_y);
+            yaw_rad = deg2rad(car_yaw);
           }
-          // rest point using map waypoints
-          int map_index = ClosestWaypoint(Xs.back(), Ys.back(), map_waypoints_x,
-                                          map_waypoints_y);
-          // find next waypoint
-          int map_size = map_waypoints_x.size();
-          double dist_waypoint =
-              distance(map_waypoints_x[map_index], map_waypoints_y[map_index],
-                       map_waypoints_x[(map_index + 1) % map_size],
-                       map_waypoints_y[(map_index + 1) % map_size]);
-          double dist_to_next = distance(
-              Xs.back(), Ys.back(), map_waypoints_x[(map_index + 1) % map_size],
-              map_waypoints_y[(map_index + 1) % map_size]);
-          // the last element of previous path just pasted the closest waypoint,
-          // so use the next waypoint
-          if (dist_to_next < dist_waypoint) map_index += 1;
-          for (unsigned int i = 0; i < 5 - Xs.size(); ++i) {
-            Xs.push_back(map_waypoints_x[(map_index + i) % map_size]);
-            Ys.push_back(map_waypoints_y[(map_index + i) % map_size]);
+          // rest point using map waypoints which is 30m apart in s in Frenet
+          // coordinate
+          for (unsigned int i = 1; i <= 5 - Xs.size(); ++i) {
+            double target_d = (double)(4 * target_lane + 2);
+            vector<double> map_waypoint_plus_lane =
+                getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
+                      map_waypoints_x, map_waypoints_y);
+            Xs.push_back(map_waypoint_plus_lane[0]);
+            Ys.push_back(map_waypoint_plus_lane[1]);
           }
+          std::cout << "Xs_size= " << Xs.size() << std::endl;
+          printVector("Xs= ", Xs);
+          printVector("Ys= ", Ys);
           // transfer to local coordinate
           for (unsigned int i = 0; i < Xs.size(); ++i) {
-            pose local_pose;
-            local_pose = homogenousTransform(car_x, car_y, deg2rad(car_yaw),
+            pose local_pose = homogenousTransform(car_x, car_y, yaw_rad,
                                              Xs[i], Ys[i]);
             Xs[i] = local_pose.x;
             Ys[i] = local_pose.y;
           }
           // create spline
           tk::spline s(Xs, Ys);
-          // find corresponded y in spline
+          double spline_dist, next_x, next_y;
+          spline_dist = distance(Xs[1], Ys[1], 30.0, s(30.0));
           // 50 MPH for 0.02 second is 0.447 meter
-          double spline_dist = distance(Xs[1], Ys[1], 30.0, s(30.0));
           double x_delta = 30.0 / (spline_dist / 0.447);
-          // fill next path positions
-          double next_x, next_y;
-          if(previous_path_size<2){
-            next_x = Xs[0]; // use current position
-          } else {
-            next_x = Xs[1];
-          }
+          next_x = Xs[1];
           for (unsigned int i = 1; i <= 50 - previous_path_size; ++i) {
             next_x += x_delta * i;
+            // find corresponded y in spline
             next_y = s(next_x);
             // transfer from local coordinate to map coordinate
             pose map_pose = homogenousTransform(
-                -car_x, -car_y, deg2rad(-car_yaw), next_x, next_y);
+                -car_x, -car_y, deg2rad(-yaw_rad), next_x, next_y);
             next_x_vals.push_back(map_pose.x);
             next_y_vals.push_back(map_pose.y);
           }
-
+          printVector("x= ", next_x_vals);
+          printVector("y= ", next_y_vals);
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
