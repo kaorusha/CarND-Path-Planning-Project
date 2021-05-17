@@ -117,21 +117,46 @@ int main() {
           // rest point using map waypoints
           int map_index = ClosestWaypoint(Xs.back(), Ys.back(), map_waypoints_x,
                                           map_waypoints_y);
+          // find next waypoint
+          int map_size = map_waypoints_x.size();
+          double dist_waypoint =
+              distance(map_waypoints_x[map_index], map_waypoints_y[map_index],
+                       map_waypoints_x[(map_index + 1) % map_size],
+                       map_waypoints_y[(map_index + 1) % map_size]);
+          double dist_to_next = distance(
+              Xs.back(), Ys.back(), map_waypoints_x[(map_index + 1) % map_size],
+              map_waypoints_y[(map_index + 1) % map_size]);
+          // the last element of previous path just pasted the closest waypoint,
+          // so use the next waypoint
+          if (dist_to_next < dist_waypoint) map_index += 1;
           for (unsigned int i = 0; i < 5 - Xs.size(); ++i) {
-            Xs.push_back(map_waypoints_x[map_index + i]);
-            Ys.push_back(map_waypoints_y[map_index + i]);
+            Xs.push_back(map_waypoints_x[(map_index + i) % map_size]);
+            Ys.push_back(map_waypoints_y[(map_index + i) % map_size]);
           }
           // transfer to local coordinate
           for (unsigned int i = 0; i < Xs.size(); ++i) {
-            pose transformed_pose;
-            transformed_pose =
-                homogenousTransform(car_x, car_y, -car_yaw, Xs[i], Ys[i]);
-            Xs[i] = transformed_pose.x;
-            Ys[i] = transformed_pose.y;
+            pose local_pose;
+            local_pose = homogenousTransform(car_x, car_y, deg2rad(car_yaw),
+                                             Xs[i], Ys[i]);
+            Xs[i] = local_pose.x;
+            Ys[i] = local_pose.y;
           }
           // create spline
           tk::spline s(Xs, Ys);
           // find corresponded y in spline
+          // 50 MPH for 0.02 second is 0.447 meter
+          double spline_dist = distance(Xs[1], Ys[1], 30.0, s.(30.0));
+          double x_delta = 30.0 / (spline_dist / 0.447);
+          // fill next path positions
+          for (unsigned int i = 1; i <= 50 - previous_path_size; ++i) {
+            double next_x = Xs[1] + x_delta * i;
+            double next_y = s(next_x);
+            // transfer from local coordinate to map coordinate
+            pose map_pose = homogenousTransform(
+                -car_x, -car_y, deg2rad(-car_yaw), next_x, next_y);
+            next_x_vals.push_back(map_pose.x);
+            next_y_vals.push_back(map_pose.y);
+          }
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
