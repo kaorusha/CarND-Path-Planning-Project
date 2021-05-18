@@ -15,6 +15,7 @@
 using nlohmann::json;
 using std::string;
 using std::vector;
+#define toM_S 0.44704
 
 Eigen::Vector2d translation(const vector<double> &trans,
                             Eigen::Vector2d input) {
@@ -129,29 +130,28 @@ int main() {
           const int lane_width = 4;
           // calculate 50 MPH to m/s and reduce 1%
           const double speed_limit = 50 * 0.99;  // MPH
-          const double accel_limit = 10 * 0.99;  // m/s^2
+          const double accel_limit = 10 * 0.5;  // m/s^2
           // minimum decelerate distance plus a buffer in meter
-          const double toM_S = 0.44704;
           const double safe_dist = 0.5 * (speed_limit * toM_S) *
                                        (speed_limit * toM_S) / accel_limit +
                                    5.0;
           // define lane = 0, 1, 2
-          int car_lane = (int)car_d % lane_width;
+          int car_lane = car_d / lane_width;
           int state = 0;
           double cmd_vel = car_speed * toM_S;
           // check front distance of ego-vehicle
           for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
             double sensor_d = sensor_fusion[i][6];
-            if ((int)sensor_d % lane_width == car_lane) {
+            if ((int)sensor_d / lane_width == car_lane) {
               double sensor_vx = sensor_fusion[i][3];
               double sensor_vy = sensor_fusion[i][4];
               double sensor_s = sensor_fusion[i][5];
               // future position at next time step
               sensor_s +=
                   sqrt(sensor_vx * sensor_vx + sensor_vy * sensor_vy) * loop_t;
+              // check ones that in front of ego vehicle
               if ((sensor_s > car_s) && (sensor_s - car_s < safe_dist)) {
                 state = 1;
-                std::cout << "too close!" << std::endl;
               }
             }
           }
@@ -211,18 +211,20 @@ int main() {
           // create spline
           tk::spline s(Xs, Ys);
           double spline_dist, next_x, next_y;
-          spline_dist = distance(Xs[1], Ys[1], Xs[1] + 30.0, s(Xs[1] + 30.0));
+          double next_waypoint_s = 30.0;
+          spline_dist = distance(Xs[1], Ys[1], Xs[1] + next_waypoint_s,
+                                 s(Xs[1] + next_waypoint_s));
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
-          double x_delta = 30.0 / (spline_dist / 0.443);
-          // std::cout << "x_delta= " << x_delta << std::endl;
           next_x = Xs[1];
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
             if (state == 1) {
               cmd_vel -= accel_limit * loop_t;
-            } else if (cmd_vel < speed_limit * toM_S) {
+            } else {
               cmd_vel += accel_limit * loop_t;
+              if (cmd_vel > speed_limit * toM_S) cmd_vel = speed_limit * toM_S;
             }
-            // double x_delta = 30.0 / (spline_dist / (cmd_vel * loop_t));
+            double x_delta =
+                next_waypoint_s / (spline_dist / (cmd_vel * loop_t));
             // std::cout << "x_delta= " << x_delta << std::endl;
             next_x += x_delta;
             // find corresponded y in spline
