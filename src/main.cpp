@@ -16,23 +16,23 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
-struct pose {
-  double x;
-  double y;
-};
+Eigen::Vector2d translation(const vector<double> &trans,
+                            Eigen::Vector2d input) {
+  Eigen::Vector2d trans_vector(trans.data());
+  assert(trans.size() == input.size());
+  return trans_vector + input;
+}
 
-pose homogenousTransform(double origin_x, double origin_y, double theta,
-                         double obj_x, double obj_y) {
-  pose target_frame;
-  target_frame.x = origin_x + cos(theta) * obj_x - sin(theta) * obj_y;
-  target_frame.y = origin_y + sin(theta) * obj_x + cos(theta) * obj_y;
-  return target_frame;
+Eigen::Vector2d rotation2d(Eigen::Vector2d input, double theta) {
+  Eigen::Matrix2d rotation;
+  rotation << cos(theta), -sin(theta), sin(theta), cos(theta);
+  return rotation * input;
 }
 
 void printVector(const string msg, const vector<double> &v) {
   std::cout << msg;
   for (unsigned int i = 0; i < v.size(); ++i) {
-    std::cout << v[i] << ", ";
+    std::cout << v[i] << "\t";
   }
   std::cout << std::endl;
 }
@@ -120,19 +120,25 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
-          std::cout << "x,y,yaw, s, d, speed=" << car_x << ", " << car_y << ", "
-                    << car_yaw << ", " << car_s << ", " << car_d << ", "
-                    << car_speed << std::endl;
+          /*
+          std::cout << std::setprecision(5) << "x\ty\tyaw\ts\td\tspeed\n"
+                    << car_x << "\t" << car_y << "\t" << car_yaw << "\t"
+                    << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
+          */
           // define target lane = 0, 1, 2
           int target_lane = 1;
           unsigned int previous_path_size = previous_path_x.size();
+          for (unsigned int i = 0; i < previous_path_size; ++i) {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
+          }
           // find 5 points to create spline
           vector<double> Xs, Ys;
           // the heading at the end of previous path
           double yaw_rad;
           if (previous_path_size >= 2) {
             // add X[-2], Y[-2]
-            std::cout << "previous_path_size >= 2" << std::endl;
+            // std::cout << "previous_path_size >= 2" << std::endl;
             Xs.push_back(previous_path_x[previous_path_size - 2]);
             Ys.push_back(previous_path_y[previous_path_size - 2]);
             // add X[-1], Y[-1]
@@ -142,7 +148,7 @@ int main() {
             yaw_rad = atan2(Ys[1] - Ys[0], Xs[1] - Xs[0]);
           } else {
             // create a fake previous point
-            std::cout << "previous_path_size less than 2" << std::endl;
+            // std::cout << "previous_path_size less than 2" << std::endl;
             Xs.push_back(car_x - cos(deg2rad(car_yaw)));
             Xs.push_back(car_x);
             Ys.push_back(car_y - sin(deg2rad(car_yaw)));
@@ -151,7 +157,8 @@ int main() {
           }
           // rest point using map waypoints which is 30m apart in s in Frenet
           // coordinate
-          for (unsigned int i = 1; i <= 5 - Xs.size(); ++i) {
+          // push another 3 point for spline creating
+          for (unsigned int i = 1; i < 4; ++i) {
             double target_d = (double)(4 * target_lane + 2);
             vector<double> map_waypoint_plus_lane =
                 getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
@@ -159,35 +166,41 @@ int main() {
             Xs.push_back(map_waypoint_plus_lane[0]);
             Ys.push_back(map_waypoint_plus_lane[1]);
           }
-          std::cout << "Xs_size= " << Xs.size() << std::endl;
-          printVector("Xs= ", Xs);
-          printVector("Ys= ", Ys);
+          // printVector("Xs= ", Xs);
+          // printVector("Ys= ", Ys);
           // transfer to local coordinate
+          double x_trans = Xs[0];
+          double y_trans = Ys[0];
           for (unsigned int i = 0; i < Xs.size(); ++i) {
-            pose local_pose = homogenousTransform(car_x, car_y, yaw_rad,
-                                             Xs[i], Ys[i]);
-            Xs[i] = local_pose.x;
-            Ys[i] = local_pose.y;
+            Eigen::Vector2d local_pose = rotation2d(
+                translation({-x_trans, -y_trans}, {Xs[i], Ys[i]}), -yaw_rad);
+            Xs[i] = local_pose(0);
+            Ys[i] = local_pose(1);
           }
+          // printVector("Xs= ", Xs);
+          // printVector("Ys= ", Ys);
           // create spline
           tk::spline s(Xs, Ys);
           double spline_dist, next_x, next_y;
-          spline_dist = distance(Xs[1], Ys[1], 30.0, s(30.0));
-          // 50 MPH for 0.02 second is 0.447 meter
-          double x_delta = 30.0 / (spline_dist / 0.447);
+          spline_dist = distance(Xs[1], Ys[1], Xs[1] + 30.0, s(Xs[1] + 30.0));
+          // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
+          double x_delta = 30.0 / (spline_dist / 0.443);
+          // std::cout << "x_delta= " << x_delta << std::endl;
           next_x = Xs[1];
-          for (unsigned int i = 1; i <= 50 - previous_path_size; ++i) {
-            next_x += x_delta * i;
+          for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
+            next_x += x_delta;
             // find corresponded y in spline
             next_y = s(next_x);
             // transfer from local coordinate to map coordinate
-            pose map_pose = homogenousTransform(
-                -car_x, -car_y, deg2rad(-yaw_rad), next_x, next_y);
-            next_x_vals.push_back(map_pose.x);
-            next_y_vals.push_back(map_pose.y);
+            Eigen::Vector2d next;
+            next << next_x, next_y;
+            Eigen::Vector2d map_pose =
+                translation({x_trans, y_trans}, rotation2d(next, yaw_rad));
+            next_x_vals.push_back(map_pose(0));
+            next_y_vals.push_back(map_pose(1));
           }
-          printVector("x= ", next_x_vals);
-          printVector("y= ", next_y_vals);
+          // printVector("x= ", next_x_vals);
+          // printVector("y= ", next_y_vals);
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
