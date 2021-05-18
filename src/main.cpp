@@ -125,8 +125,37 @@ int main() {
                     << car_x << "\t" << car_y << "\t" << car_yaw << "\t"
                     << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
           */
-          // define target lane = 0, 1, 2
-          int target_lane = 1;
+          const double loop_t = 0.02;  // sec
+          const int lane_width = 4;
+          // calculate 50 MPH to m/s and reduce 1%
+          const double speed_limit = 50 * 0.99;  // MPH
+          const double accel_limit = 10 * 0.99;  // m/s^2
+          // minimum decelerate distance plus a buffer in meter
+          const double toM_S = 0.44704;
+          const double safe_dist = 0.5 * (speed_limit * toM_S) *
+                                       (speed_limit * toM_S) / accel_limit +
+                                   5.0;
+          // define lane = 0, 1, 2
+          int car_lane = (int)car_d % lane_width;
+          int state = 0;
+          double cmd_vel = car_speed * toM_S;
+          // check front distance of ego-vehicle
+          for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
+            double sensor_d = sensor_fusion[i][6];
+            if ((int)sensor_d % lane_width == car_lane) {
+              double sensor_vx = sensor_fusion[i][3];
+              double sensor_vy = sensor_fusion[i][4];
+              double sensor_s = sensor_fusion[i][5];
+              // future position at next time step
+              sensor_s +=
+                  sqrt(sensor_vx * sensor_vx + sensor_vy * sensor_vy) * loop_t;
+              if ((sensor_s > car_s) && (sensor_s - car_s < safe_dist)) {
+                state = 1;
+                std::cout << "too close!" << std::endl;
+              }
+            }
+          }
+
           unsigned int previous_path_size = previous_path_x.size();
           for (unsigned int i = 0; i < previous_path_size; ++i) {
             next_x_vals.push_back(previous_path_x[i]);
@@ -159,7 +188,7 @@ int main() {
           // coordinate
           // push another 3 point for spline creating
           for (unsigned int i = 1; i < 4; ++i) {
-            double target_d = (double)(4 * target_lane + 2);
+            double target_d = (double)(4 * car_lane + 2);
             vector<double> map_waypoint_plus_lane =
                 getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
                       map_waypoints_x, map_waypoints_y);
@@ -188,6 +217,13 @@ int main() {
           // std::cout << "x_delta= " << x_delta << std::endl;
           next_x = Xs[1];
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
+            if (state == 1) {
+              cmd_vel -= accel_limit * loop_t;
+            } else if (cmd_vel < speed_limit * toM_S) {
+              cmd_vel += accel_limit * loop_t;
+            }
+            // double x_delta = 30.0 / (spline_dist / (cmd_vel * loop_t));
+            // std::cout << "x_delta= " << x_delta << std::endl;
             next_x += x_delta;
             // find corresponded y in spline
             next_y = s(next_x);
