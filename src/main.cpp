@@ -33,7 +33,7 @@ Eigen::Vector2d rotation2d(Eigen::Vector2d input, double theta) {
 void printVector(const string msg, const vector<double> &v) {
   std::cout << msg;
   for (unsigned int i = 0; i < v.size(); ++i) {
-    std::cout << v[i] << "\t";
+    std::cout << std::setprecision(10) << v[i] << "\t";
   }
   std::cout << std::endl;
 }
@@ -52,6 +52,7 @@ int main() {
   string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
+  double cmd_vel = 0.0;
 
   std::ifstream in_map_(map_file_.c_str(), std::ifstream::in);
 
@@ -75,7 +76,7 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
+  h.onMessage([&cmd_vel, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                &map_waypoints_dx,
                &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data,
                                   size_t length, uWS::OpCode opCode) {
@@ -130,7 +131,7 @@ int main() {
           const int lane_width = 4;
           // calculate 50 MPH to m/s and reduce 1%
           const double speed_limit = 50 * 0.99;  // MPH
-          const double accel_limit = 10 * 0.5;  // m/s^2
+          const double accel_limit = 10 * 0.5;   // m/s^2
           // minimum decelerate distance plus a buffer in meter
           const double safe_dist = 0.5 * (speed_limit * toM_S) *
                                        (speed_limit * toM_S) / accel_limit +
@@ -138,11 +139,11 @@ int main() {
           // define lane = 0, 1, 2
           int car_lane = car_d / lane_width;
           int state = 0;
-          double cmd_vel = car_speed * toM_S;
           // check front distance of ego-vehicle
           for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
             double sensor_d = sensor_fusion[i][6];
-            if ((int)sensor_d / lane_width == car_lane) {
+            // check vehicle in the same lane
+            if ((int)(sensor_d / lane_width) == car_lane) {
               double sensor_vx = sensor_fusion[i][3];
               double sensor_vy = sensor_fusion[i][4];
               double sensor_s = sensor_fusion[i][5];
@@ -187,8 +188,8 @@ int main() {
           // rest point using map waypoints which is 30m apart in s in Frenet
           // coordinate
           // push another 3 point for spline creating
+          double target_d = (double)(4 * car_lane + 2);
           for (unsigned int i = 1; i < 4; ++i) {
-            double target_d = (double)(4 * car_lane + 2);
             vector<double> map_waypoint_plus_lane =
                 getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
                       map_waypoints_x, map_waypoints_y);
@@ -225,7 +226,10 @@ int main() {
             }
             double x_delta =
                 next_waypoint_s / (spline_dist / (cmd_vel * loop_t));
-            // std::cout << "x_delta= " << x_delta << std::endl;
+            if(x_delta<0){
+              std::cout << "x_delta < 0: " << x_delta << std::endl;
+              x_delta = 0.001;
+            }
             next_x += x_delta;
             // find corresponded y in spline
             next_y = s(next_x);
