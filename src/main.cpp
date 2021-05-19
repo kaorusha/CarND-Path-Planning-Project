@@ -39,6 +39,8 @@ void printVector(const string msg, const vector<double> &v) {
   std::cout << std::endl;
 }
 
+map<int, vector<double>> castPrediction()
+
 int main() {
   uWS::Hub h;
 
@@ -53,7 +55,11 @@ int main() {
   string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
+  // variables passed to onMessage()
+  // initial command velocity is 0.0 m/s
   double cmd_vel = 0.0;
+  // initial state as keep lane
+  string state = "KL";
 
   std::ifstream in_map_(map_file_.c_str(), std::ifstream::in);
 
@@ -77,8 +83,8 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&cmd_vel, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
-               &map_waypoints_dx,
+  h.onMessage([&cmd_vel, &state, &map_waypoints_x, &map_waypoints_y,
+               &map_waypoints_s, &map_waypoints_dx,
                &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data,
                                   size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -139,7 +145,9 @@ int main() {
                                    5.0;
           // define lane = 0, 1, 2
           int car_lane = car_d / lane_width;
-          int state = 0;
+          Vehicle behavior_planner;
+          state = behavior_planner.choose_next_state(sensor_fusion);
+
           // check front distance of ego-vehicle
           for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
             double sensor_d = sensor_fusion[i][6];
@@ -227,7 +235,7 @@ int main() {
             }
             double x_delta =
                 next_waypoint_s / (spline_dist / (cmd_vel * loop_t));
-            if(x_delta<0){
+            if (x_delta < 0) {
               std::cout << "x_delta < 0: " << x_delta << std::endl;
               x_delta = 0.001;
             }
