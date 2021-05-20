@@ -39,8 +39,6 @@ void printVector(const string msg, const vector<double> &v) {
   std::cout << std::endl;
 }
 
-map<int, vector<double>> castPrediction()
-
 int main() {
   uWS::Hub h;
 
@@ -56,10 +54,17 @@ int main() {
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
   // variables passed to onMessage()
-  // initial command velocity is 0.0 m/s
-  double cmd_vel = 0.0;
-  // initial state as keep lane
-  string state = "KL";
+  Vehicle ego;
+  const int num_lanes = 3;
+  const int lane_width = 4;
+  // calculate 50 MPH to m/s and reduce 1%
+  const double speed_limit = 50 * 0.99;  // MPH
+  const double accel_limit = 10 * 0.5;   // m/s^2
+  // minimum decelerate distance plus a buffer in meter
+  const double safe_dist =
+      0.5 * (speed_limit * toM_S) * (speed_limit * toM_S) / accel_limit + 5.0;
+  ego.configure(num_lanes, lane_width, speed_limit, accel_limit, max_s,
+                safe_dist);
 
   std::ifstream in_map_(map_file_.c_str(), std::ifstream::in);
 
@@ -83,8 +88,8 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&cmd_vel, &state, &map_waypoints_x, &map_waypoints_y,
-               &map_waypoints_s, &map_waypoints_dx,
+  h.onMessage([&ego, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
+               &map_waypoints_dx,
                &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data,
                                   size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -135,24 +140,16 @@ int main() {
                     << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
           */
           const double loop_t = 0.02;  // sec
-          const int lane_width = 4;
-          // calculate 50 MPH to m/s and reduce 1%
-          const double speed_limit = 50 * 0.99;  // MPH
-          const double accel_limit = 10 * 0.5;   // m/s^2
-          // minimum decelerate distance plus a buffer in meter
-          const double safe_dist = 0.5 * (speed_limit * toM_S) *
-                                       (speed_limit * toM_S) / accel_limit +
-                                   5.0;
-          // define lane = 0, 1, 2
-          int car_lane = car_d / lane_width;
-          Vehicle behavior_planner;
-          state = behavior_planner.choose_next_state(sensor_fusion);
+          ego.update(car_x, car_y, car_s, car_d, car_yaw, car_speed * toM_S,
+                     loop_t);
+          ego.lane = ego.choose_next_state(sensor_fusion);
 
           // check front distance of ego-vehicle
+          bool brake = false;
           for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
             double sensor_d = sensor_fusion[i][6];
             // check vehicle in the same lane
-            if ((int)(sensor_d / lane_width) == car_lane) {
+            if ((int)(sensor_d / ego.lane_width) == ego.lane) {
               double sensor_vx = sensor_fusion[i][3];
               double sensor_vy = sensor_fusion[i][4];
               double sensor_s = sensor_fusion[i][5];
@@ -161,7 +158,8 @@ int main() {
                   sqrt(sensor_vx * sensor_vx + sensor_vy * sensor_vy) * loop_t;
               // check ones that in front of ego vehicle
               if ((sensor_s > car_s) && (sensor_s - car_s < safe_dist)) {
-                state = 1;
+                brake = true;
+                break;
               }
             }
           }
@@ -197,7 +195,7 @@ int main() {
           // rest point using map waypoints which is 30m apart in s in Frenet
           // coordinate
           // push another 3 point for spline creating
-          double target_d = (double)(4 * car_lane + 2);
+          double target_d = (double)(4 * ego.lane + 2);
           for (unsigned int i = 1; i < 4; ++i) {
             vector<double> map_waypoint_plus_lane =
                 getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
@@ -227,14 +225,15 @@ int main() {
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
           next_x = Xs[1];
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
-            if (state == 1) {
-              cmd_vel -= accel_limit * loop_t;
+            if (brake) {
+              ego.cmd_vel -= ego.max_acceleration * loop_t;
             } else {
-              cmd_vel += accel_limit * loop_t;
-              if (cmd_vel > speed_limit * toM_S) cmd_vel = speed_limit * toM_S;
+              ego.cmd_vel += ego.max_acceleration * loop_t;
+              if (ego.cmd_vel > ego.target_speed * toM_S)
+                ego.cmd_vel = ego.target_speed * toM_S;
             }
             double x_delta =
-                next_waypoint_s / (spline_dist / (cmd_vel * loop_t));
+                next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));
             if (x_delta < 0) {
               std::cout << "x_delta < 0: " << x_delta << std::endl;
               x_delta = 0.001;
