@@ -58,13 +58,9 @@ int main() {
   const int num_lanes = 3;
   const int lane_width = 4;
   // calculate 50 MPH to m/s and reduce 1%
-  const double speed_limit = 50 * 0.99;  // MPH
-  const double accel_limit = 10 * 0.5;   // m/s^2
-  // minimum decelerate distance plus a buffer in meter
-  const double safe_dist =
-      0.5 * (speed_limit * toM_S) * (speed_limit * toM_S) / accel_limit + 5.0;
-  ego.configure(num_lanes, lane_width, speed_limit, accel_limit, max_s,
-                safe_dist);
+  const float speed_limit = 50 * 0.99;  // MPH
+  const float accel_limit = 10 * 0.5;   // m/s^2
+  ego.configure(num_lanes, lane_width, speed_limit * toM_S, accel_limit, max_s);
 
   std::ifstream in_map_(map_file_.c_str(), std::ifstream::in);
 
@@ -140,8 +136,7 @@ int main() {
                     << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
           */
           const double loop_t = 0.02;  // sec
-          ego.update(car_x, car_y, car_s, car_d, car_yaw, car_speed * toM_S,
-                     loop_t);
+          ego.update(car_s, car_d, car_speed * toM_S, loop_t);
           ego.lane = ego.choose_next_state(sensor_fusion);
 
           // check front distance of ego-vehicle
@@ -157,7 +152,8 @@ int main() {
               sensor_s +=
                   sqrt(sensor_vx * sensor_vx + sensor_vy * sensor_vy) * loop_t;
               // check ones that in front of ego vehicle
-              if ((sensor_s > car_s) && (sensor_s - car_s < safe_dist)) {
+              if ((sensor_s > car_s) &&
+                  (sensor_s - car_s < ego.preferred_buffer)) {
                 brake = true;
                 break;
               }
@@ -223,14 +219,14 @@ int main() {
           spline_dist = distance(Xs[1], Ys[1], Xs[1] + next_waypoint_s,
                                  s(Xs[1] + next_waypoint_s));
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
+          // x_delta will be less for busy traffic and lower lane speed
           next_x = Xs[1];
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
             if (brake) {
               ego.cmd_vel -= ego.max_acceleration * loop_t;
             } else {
               ego.cmd_vel += ego.max_acceleration * loop_t;
-              if (ego.cmd_vel > ego.target_speed * toM_S)
-                ego.cmd_vel = ego.target_speed * toM_S;
+              if (ego.cmd_vel > ego.lane_speed) ego.cmd_vel = ego.lane_speed;
             }
             double x_delta =
                 next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));

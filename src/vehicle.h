@@ -23,19 +23,22 @@ class Vehicle {
 
   // Vehicle functions
   /**
-   * @brief
+   * @brief update state, calculate lane, accelerate and safe distance
    *
-   * @param car_x meter in map coordinate
-   * @param car_y meter in map coordinate
    * @param car_s m in frenet coordinate
    * @param car_d m in frenet coordinate 0 is the center of the road
-   * @param car_yaw degree
    * @param car_v m/s
    * @param loop_t delta_t in second
    */
-  void update(double car_x, double car_y, double car_s, double car_d,
-              double car_yaw, double car_v, double loop_t);
+  void update(double car_s, double car_d, double car_v, double loop_t);
 
+  /**
+   * @brief rough position after 1 sec and calculate cost function. Update
+   * traffic speed for that lane
+   *
+   * @param predictions sensor fusion data
+   * @return int lane index of minimum cost, for trajectory generation
+   */
   int choose_next_state(nlohmann::json &predictions);
 
   vector<string> successor_states();
@@ -67,16 +70,16 @@ class Vehicle {
 
   float position_at(int t);
 
-  bool get_vehicle_behind(nlohmann::json &predictions, int lane, int &id);
+  bool get_vehicle_behind(const nlohmann::json &predictions, int lane, int &id);
 
-  bool get_vehicle_ahead(nlohmann::json &predictions, int lane, int &id);
+  bool get_vehicle_ahead(const nlohmann::json &predictions, int lane, int &id);
 
   vector<Vehicle> generate_predictions(int horizon = 2);
 
   void realize_next_state(vector<Vehicle> &trajectory);
 
-  void configure(int num_lanes, int lane_width, double speed_limit,
-                 double accel_limit, double max_s, double safe_dist);
+  void configure(int num_lanes, int lane_width, float speed_limit,
+                 float accel_limit, double max_s);
 
   // public Vehicle variables
   struct collider {
@@ -93,11 +96,11 @@ class Vehicle {
 
   int lane, goal_lane, lanes_available, lane_width;
 
-  float x, y, s, d, yaw, v, a, target_speed, max_acceleration, goal_s;
+  float s, v, a, target_speed, max_acceleration, goal_s;
 
   string state;
 
-  float cmd_vel;
+  float cmd_vel, lane_speed;
 };
 
 #endif  // VEHICLE_H

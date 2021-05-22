@@ -25,23 +25,19 @@ Vehicle::Vehicle(int lane, float s, float v, float a, string state) {
   this->v = v;
   this->a = a;
   this->state = state;
-  max_acceleration = -1;
 }
 
 Vehicle::~Vehicle() {}
 
-void Vehicle::update(double car_x, double car_y, double car_s, double car_d,
-                     double car_yaw, double car_v, double loop_t) {
+void Vehicle::update(double car_s, double car_d, double car_v, double loop_t) {
   // define lane = 0, 1, 2
-  this->x = car_x;
-  this->y = car_y;
   this->s = car_s;
-  this->d = car_d;
-  this->yaw = car_yaw;
   // calculate acceleration before update speed
   this->a = (car_v - this->v) / loop_t;
   this->v = car_v;
   this->lane = car_d / lane_width;
+  // minimum decelerate distance plus a buffer in meter
+  this->preferred_buffer = 0.5 * car_v * car_v / this->max_acceleration + 5.0;
 }
 
 int Vehicle::choose_next_state(nlohmann::json &predictions) {
@@ -70,6 +66,7 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
   vector<string> possible_successor_state = successor_states();
   vector<string>::iterator state = possible_successor_state.begin();
   vector<float> cost_for_state;
+  vector<float> lane_speed;
   while (state != possible_successor_state.end()) {
     // generate a rough idea of what trajectory we would
     // follow IF we chose this state.
@@ -79,6 +76,7 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
     // calculate the "cost" associated with that trajectory.
     cost_for_state.push_back(
         calculate_cost(*this, predictions, trajectory_for_state));
+    lane_speed.push_back(trajectory_for_state.back().v);
     ++state;
   }
   int best_state_index = std::distance(
@@ -89,6 +87,7 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
    * TODO: Change return value here:
    */
   string next_state = possible_successor_state[best_state_index];
+  this->lane_speed = lane_speed[best_state_index];
   return this->lane + lane_direction[next_state];
 }
 
@@ -244,10 +243,8 @@ vector<Vehicle> Vehicle::lane_change_trajectory(string state,
     float sensor_d = predictions[i][6];
     if ((int)(sensor_d / this->lane_width) == new_lane) {
       float sensor_s = predictions[i][5];
-      // todo: because we don't have acceleration of other vehicle, use constant
-      // velocity model to predict other vehicle's future position
-      float predict_s;
-      if (fabs(predict_s - this->s) < this->preferred_buffer) {
+      // permit lane changing if maintaining safe distance
+      if (fabs(sensor_s - this->s) < this->preferred_buffer) {
         // If lane change is not possible, return empty trajectory.
         return trajectory;
       }
@@ -267,7 +264,7 @@ float Vehicle::position_at(int t) {
   return this->s + this->v * t + this->a * t * t / 2.0;
 }
 
-bool Vehicle::get_vehicle_behind(nlohmann::json &predictions, int lane,
+bool Vehicle::get_vehicle_behind(const nlohmann::json &predictions, int lane,
                                  int &id) {
   // Returns a true if a vehicle is found behind the current vehicle, false
   //   otherwise. The passed reference id is updated if a vehicle is found.
@@ -290,7 +287,7 @@ bool Vehicle::get_vehicle_behind(nlohmann::json &predictions, int lane,
   return found_vehicle;
 }
 
-bool Vehicle::get_vehicle_ahead(nlohmann::json &predictions, int lane,
+bool Vehicle::get_vehicle_ahead(const nlohmann::json &predictions, int lane,
                                 int &id) {
   // Returns a true if a vehicle is found ahead of the current vehicle, false
   //   otherwise. The passed reference id is updated if a vehicle is found.
@@ -338,8 +335,8 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
   this->a = next_state.a;
 }
 
-void Vehicle::configure(int num_lanes, int width, double speed_limit,
-                        double accel_limit, double max_s, double safe_dist) {
+void Vehicle::configure(int num_lanes, int width, float speed_limit,
+                        float accel_limit, double max_s) {
   // Called by simulator before simulation begins. Sets various parameters which
   //   will impact the ego vehicle.
   target_speed = speed_limit;
@@ -347,5 +344,4 @@ void Vehicle::configure(int num_lanes, int width, double speed_limit,
   max_acceleration = accel_limit;
   lane_width = width;
   goal_s = max_s;
-  preferred_buffer = safe_dist;
 }
