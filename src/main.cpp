@@ -138,6 +138,7 @@ int main() {
           const double loop_t = 0.02;  // sec
           ego.update(car_s, car_d, car_speed * toM_S, loop_t);
           ego.lane = ego.choose_next_state(sensor_fusion);
+          std::cout<<"lane = "<<ego.lane<<std::endl;
 
           // check front distance of ego-vehicle
           bool brake = false;
@@ -226,7 +227,7 @@ int main() {
               ego.cmd_vel -= ego.max_acceleration * loop_t;
             } else {
               ego.cmd_vel += ego.max_acceleration * loop_t;
-              if (ego.cmd_vel > ego.lane_speed) ego.cmd_vel = ego.lane_speed;
+              if (ego.cmd_vel > ego.target_speed) ego.cmd_vel = ego.target_speed;
             }
             double x_delta =
                 next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));

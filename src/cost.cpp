@@ -1,4 +1,5 @@
 #include "cost.h"
+
 #include <cmath>
 #include <functional>
 #include <iterator>
@@ -13,7 +14,7 @@ using std::vector;
  * TODO: change weights for cost functions.
  */
 const float REACH_GOAL = 0;
-const float EFFICIENCY = 10;
+const float EFFICIENCY = 100;
 
 // Here we have provided two possible suggestions for cost functions, but feel
 //   free to use your own! The weighted cost over all cost functions is computed
@@ -93,7 +94,8 @@ float calculate_cost(const Vehicle &vehicle, const nlohmann::json &predictions,
 }
 
 map<string, float> get_helper_data(const Vehicle &vehicle,
-                                   const vector<Vehicle> &trajectory) {
+                                   const vector<Vehicle> &trajectory,
+                                   const nlohmann::json &predictions) {
   // Generate helper data to use in cost functions:
   // intended_lane: the current lane +/- 1 if vehicle is planning or
   //   executing a lane change.
