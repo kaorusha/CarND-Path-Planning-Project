@@ -5,7 +5,7 @@
 #include <map>
 #include <string>
 #include <vector>
-
+#include <iostream>
 #include "cost.h"
 
 using std::string;
@@ -38,6 +38,22 @@ void Vehicle::update(double car_s, double car_d, double car_v, double loop_t) {
   this->lane = car_d / lane_width;
   // minimum decelerate distance plus a buffer in meter
   this->preferred_buffer = 0.5 * car_v * car_v / this->max_acceleration + 5.0;
+}
+
+void printVector(const string msg, const vector<float> &v) {
+  std::cout << msg;
+  for (unsigned int i = 0; i < v.size(); ++i) {
+    std::cout << std::setprecision(10) << v[i] << "\t";
+  }
+  std::cout << std::endl;
+}
+
+void printVector(const string msg, const vector<string> &v) {
+  std::cout << msg;
+  for (unsigned int i = 0; i < v.size(); ++i) {
+    std::cout << std::setprecision(10) << v[i] << "\t";
+  }
+  std::cout << std::endl;
 }
 
 int Vehicle::choose_next_state(nlohmann::json &predictions) {
@@ -82,11 +98,13 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
   int best_state_index = std::distance(
       cost_for_state.begin(),
       std::min_element(cost_for_state.begin(), cost_for_state.end()));
-
+  //printVector("state= ", possible_successor_state);
+  printVector("cost=  ", cost_for_state);
   /**
    * TODO: Change return value here:
    */
   string next_state = possible_successor_state[best_state_index];
+  this->state = next_state;
   this->lane_speed = lane_speed[best_state_index];
   return this->lane + lane_direction[next_state];
 }

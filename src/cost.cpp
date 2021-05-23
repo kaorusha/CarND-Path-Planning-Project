@@ -51,24 +51,32 @@ float inefficiency_cost(const Vehicle &vehicle,
                         map<string, float> &data) {
   // Cost becomes higher for trajectories with intended lane and final lane
   //   that have traffic slower than vehicle's target speed.
-  float proposed_speed_intended = trajectory.back().v;
+  float proposed_speed_intended =
+      lane_speed(vehicle, predictions, data["intended_lane"]);
   string state = trajectory.back().state;
-  if (state.compare("PLCL") == 0 | state.compare("PLCR") == 0) {
-    // when generating PLCL & PLCR trajectory, trajectory keep current speed
-    // when no vehicle found in the intended lane. But we can accelerate after
-    // changing lane.
-    if (trajectory.front().v == trajectory.back().v) {
-      proposed_speed_intended = vehicle.target_speed;
-    }
-  }
-  // if no vehicle ahead than trajectory generator use target speed;
-  float proposed_speed_final = trajectory.back().v;
+  // when generating PLCL & PLCR trajectory, trajectory keep current lane
+  // speed when no vehicle found in the intended lane. However the kinematics
+  // is updated so the next speed will be different (constraint by acceleration
+  // limit)
+  float proposed_speed_final = lane_speed(vehicle, predictions, data["final_lane"]);
 
   float cost = (2.0 * vehicle.target_speed - proposed_speed_intended -
                 proposed_speed_final) /
                vehicle.target_speed;
 
   return cost;
+}
+
+float lane_speed(const Vehicle &vehicle, const nlohmann::json &predictions,
+                 int lane) {
+  Vehicle temp = vehicle;
+  int vehicle_ahead_id;
+  if (temp.get_vehicle_ahead(predictions, lane, vehicle_ahead_id)) {
+    float vx = predictions[vehicle_ahead_id][3];
+    float vy = predictions[vehicle_ahead_id][4];
+    return sqrt(vx * vx + vy * vy);
+  }
+  return vehicle.target_speed;
 }
 
 float calculate_cost(const Vehicle &vehicle, const nlohmann::json &predictions,

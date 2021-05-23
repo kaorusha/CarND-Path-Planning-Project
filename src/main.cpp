@@ -31,14 +31,6 @@ Eigen::Vector2d rotation2d(Eigen::Vector2d input, double theta) {
   return rotation * input;
 }
 
-void printVector(const string msg, const vector<double> &v) {
-  std::cout << msg;
-  for (unsigned int i = 0; i < v.size(); ++i) {
-    std::cout << std::setprecision(10) << v[i] << "\t";
-  }
-  std::cout << std::endl;
-}
-
 int main() {
   uWS::Hub h;
 
@@ -138,7 +130,7 @@ int main() {
           const double loop_t = 0.02;  // sec
           ego.update(car_s, car_d, car_speed * toM_S, loop_t);
           ego.lane = ego.choose_next_state(sensor_fusion);
-          std::cout<<"lane = "<<ego.lane<<std::endl;
+          // std::cout<<"lane = "<<ego.lane<<std::endl;
 
           // check front distance of ego-vehicle
           bool brake = false;
