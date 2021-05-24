@@ -128,12 +128,15 @@ int main() {
                     << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
           */
           const double loop_t = 0.02;  // sec
+          ego.last_update_time += (float)loop_t;
           ego.update(car_s, car_d, car_speed * toM_S, loop_t);
-          ego.lane = ego.choose_next_state(sensor_fusion);
-          // std::cout<<"lane = "<<ego.lane<<std::endl;
-
+          if ((ego.goal_lane < 0 || ego.goal_lane == ego.lane) &&
+              ego.last_update_time > 0.2) {
+            ego.goal_lane = ego.choose_next_state(sensor_fusion);
+            ego.last_update_time = 0;
+          }
           // check front distance of ego-vehicle
-          bool brake = false;
+          bool too_close = false;
           for (unsigned int i = 0; i < sensor_fusion.size(); ++i) {
             double sensor_d = sensor_fusion[i][6];
             // check vehicle in the same lane
@@ -147,7 +150,7 @@ int main() {
               // check ones that in front of ego vehicle
               if ((sensor_s > car_s) &&
                   (sensor_s - car_s < ego.preferred_buffer)) {
-                brake = true;
+                too_close = true;
                 break;
               }
             }
@@ -184,7 +187,7 @@ int main() {
           // rest point using map waypoints which is 30m apart in s in Frenet
           // coordinate
           // push another 3 point for spline creating
-          double target_d = (double)(4 * ego.lane + 2);
+          double target_d = (double)(4 * ego.goal_lane + 2);
           for (unsigned int i = 1; i < 4; ++i) {
             vector<double> map_waypoint_plus_lane =
                 getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
@@ -213,14 +216,21 @@ int main() {
                                  s(Xs[1] + next_waypoint_s));
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
           // x_delta will be less for busy traffic and lower lane speed
+          float acc_limit;
+          float velocity_limit;
+          if (ego.state == "LCR" || ego.state == "RCR") {
+            acc_limit = ego.max_acceleration * 0.8;
+            velocity_limit = ego.target_speed * 0.8;
+          } else {
+            acc_limit = ego.max_acceleration;
+            velocity_limit = ego.target_speed;
+          }
           next_x = Xs[1];
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
-            if (brake) {
-              ego.cmd_vel -= ego.max_acceleration * loop_t;
-            } else {
-              ego.cmd_vel += ego.max_acceleration * loop_t;
-              if (ego.cmd_vel > ego.target_speed) ego.cmd_vel = ego.target_speed;
-            }
+            if (too_close || ego.cmd_vel > velocity_limit) {
+              ego.cmd_vel -= acc_limit * loop_t;
+            } else if (ego.cmd_vel < velocity_limit)
+              ego.cmd_vel += acc_limit * loop_t;
             double x_delta =
                 next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));
             if (x_delta < 0) {

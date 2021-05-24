@@ -1,11 +1,12 @@
 #include "vehicle.h"
 
 #include <algorithm>
+#include <iostream>
 #include <iterator>
 #include <map>
 #include <string>
 #include <vector>
-#include <iostream>
+
 #include "cost.h"
 
 using std::string;
@@ -17,6 +18,8 @@ Vehicle::Vehicle() {
   this->v = 0.0;
   this->state = "CS";
   this->cmd_vel = 0.0;
+  this->last_update_time = 0.2;
+  this->goal_lane = -1;
 }
 
 Vehicle::Vehicle(int lane, float s, float v, float a, string state) {
@@ -37,7 +40,7 @@ void Vehicle::update(double car_s, double car_d, double car_v, double loop_t) {
   this->v = car_v;
   this->lane = car_d / lane_width;
   // minimum decelerate distance plus a buffer in meter
-  this->preferred_buffer = 0.5 * car_v * car_v / this->max_acceleration + 5.0;
+  this->preferred_buffer = 0.5 * car_v * 3600/1000;
 }
 
 void printVector(const string msg, const vector<float> &v) {
@@ -81,8 +84,10 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
    */
   vector<string> possible_successor_state = successor_states();
   vector<string>::iterator state = possible_successor_state.begin();
-  vector<float> cost_for_state;
-  vector<float> lane_speed;
+  float min_cost = std::numeric_limits<float>::max();
+  float cost_for_state;
+  string next_state;
+  int next_lane;
   while (state != possible_successor_state.end()) {
     // generate a rough idea of what trajectory we would
     // follow IF we chose this state.
@@ -90,23 +95,26 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
         generate_trajectory(*state, predictions);
 
     // calculate the "cost" associated with that trajectory.
-    cost_for_state.push_back(
-        calculate_cost(*this, predictions, trajectory_for_state));
-    lane_speed.push_back(trajectory_for_state.back().v);
+    if (trajectory_for_state.size() != 0) {
+      cost_for_state = calculate_cost(*this, predictions, trajectory_for_state);
+      if (cost_for_state < min_cost) {
+        min_cost = cost_for_state;
+        next_state = *state;
+        next_lane = trajectory_for_state.back().lane;
+        this->lane_speed = trajectory_for_state.back().v;
+      }
+    }
     ++state;
   }
-  int best_state_index = std::distance(
-      cost_for_state.begin(),
-      std::min_element(cost_for_state.begin(), cost_for_state.end()));
-  //printVector("state= ", possible_successor_state);
-  printVector("cost=  ", cost_for_state);
   /**
    * TODO: Change return value here:
    */
-  string next_state = possible_successor_state[best_state_index];
+  if (this->state != next_state) {
+    std::cout << "next state= " << next_state << "\tnext lane= " << next_lane
+              << std::endl;
+  }
   this->state = next_state;
-  this->lane_speed = lane_speed[best_state_index];
-  return this->lane + lane_direction[next_state];
+  return next_lane;
 }
 
 vector<string> Vehicle::successor_states() {
@@ -120,12 +128,12 @@ vector<string> Vehicle::successor_states() {
     states.push_back("PLCL");
     states.push_back("PLCR");
   } else if (state.compare("PLCL") == 0) {
-    if (lane != lanes_available - 1) {
+    if (lane != 0) {
       states.push_back("PLCL");
       states.push_back("LCL");
     }
   } else if (state.compare("PLCR") == 0) {
-    if (lane != 0) {
+    if (lane != lanes_available - 1) {
       states.push_back("PLCR");
       states.push_back("LCR");
     }

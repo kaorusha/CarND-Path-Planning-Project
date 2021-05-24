@@ -101,6 +101,7 @@ class Vehicle {
   string state;
 
   float cmd_vel, lane_speed;
+  float last_update_time;
 };
 
 #endif  // VEHICLE_H

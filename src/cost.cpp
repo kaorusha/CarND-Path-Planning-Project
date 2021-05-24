@@ -6,7 +6,7 @@
 #include <map>
 #include <string>
 #include <vector>
-
+#include <iostream>
 using std::string;
 using std::vector;
 
@@ -15,6 +15,8 @@ using std::vector;
  */
 const float REACH_GOAL = 0;
 const float EFFICIENCY = 100;
+const float OFF_ROAD = 200;
+const float CHANGE_LANE = 10;
 
 // Here we have provided two possible suggestions for cost functions, but feel
 //   free to use your own! The weighted cost over all cost functions is computed
@@ -58,7 +60,8 @@ float inefficiency_cost(const Vehicle &vehicle,
   // speed when no vehicle found in the intended lane. However the kinematics
   // is updated so the next speed will be different (constraint by acceleration
   // limit)
-  float proposed_speed_final = lane_speed(vehicle, predictions, data["final_lane"]);
+  float proposed_speed_final =
+      lane_speed(vehicle, predictions, data["final_lane"]);
 
   float cost = (2.0 * vehicle.target_speed - proposed_speed_intended -
                 proposed_speed_final) /
@@ -79,6 +82,24 @@ float lane_speed(const Vehicle &vehicle, const nlohmann::json &predictions,
   return vehicle.target_speed;
 }
 
+float off_road_cost(const Vehicle &vehicle, const vector<Vehicle> &trajectory,
+                   const nlohmann::json &predictions,
+                   map<string, float> &data) {
+  if (data["intended_lane"] > 2 || data["intended_lane"] < 0)
+    return 1.0;
+  else
+    return 0.0;
+}
+
+float change_lane_cost(const Vehicle &vehicle, const vector<Vehicle> &trajectory,
+                     const nlohmann::json &predictions,
+                     map<string, float> &data) {
+  if (data["intended_lane"] == data["final_lane"])
+    return 0.0;
+  else
+    return 1.0;
+}
+
 float calculate_cost(const Vehicle &vehicle, const nlohmann::json &predictions,
                      const vector<Vehicle> &trajectory) {
   // Sum weighted cost functions to get total cost for trajectory.
@@ -89,9 +110,8 @@ float calculate_cost(const Vehicle &vehicle, const nlohmann::json &predictions,
   // Add additional cost functions here.
   vector<std::function<float(const Vehicle &, const vector<Vehicle> &,
                              const nlohmann::json &, map<string, float> &)>>
-      cf_list = {inefficiency_cost};
-  vector<float> weight_list = {EFFICIENCY};
-
+      cf_list = {inefficiency_cost, off_road_cost, change_lane_cost};
+  vector<float> weight_list = {EFFICIENCY, OFF_ROAD, CHANGE_LANE};
   for (int i = 0; i < cf_list.size(); ++i) {
     float new_cost = weight_list[i] * cf_list[i](vehicle, trajectory,
                                                  predictions, trajectory_data);

@@ -21,6 +21,19 @@ float inefficiency_cost(const Vehicle &vehicle,
                         map<string, float> &data);
 
 /**
+ * @brief Penalizes trajectories that drive off the road
+ */
+float off_road_cost(const Vehicle &vehicle, const vector<Vehicle> &trajectory,
+                   const nlohmann::json &predictions, map<string, float> &data);
+
+/**
+ * @brief Rewards trajectories that keep current lane
+ */
+float change_lane_cost(const Vehicle &vehicle, const vector<Vehicle> &trajectory,
+                     const nlohmann::json &predictions,
+                     map<string, float> &data);
+
+/**
  * @brief Find the vehicle ahead in that lane. If no vehicle ahead than use
  * target speed;
  *
