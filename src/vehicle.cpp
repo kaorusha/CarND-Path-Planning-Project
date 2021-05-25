@@ -40,7 +40,7 @@ void Vehicle::update(double car_s, double car_d, double car_v, double loop_t) {
   this->v = car_v;
   this->lane = car_d / lane_width;
   // minimum decelerate distance plus a buffer in meter
-  this->preferred_buffer = 0.5 * car_v * 3600/1000;
+  this->preferred_buffer = 0.5 * car_v * 3600 / 1000;
 }
 
 void printVector(const string msg, const vector<float> &v) {
@@ -109,10 +109,11 @@ int Vehicle::choose_next_state(nlohmann::json &predictions) {
   /**
    * TODO: Change return value here:
    */
+  /*
   if (this->state != next_state) {
     std::cout << "next state= " << next_state << "\tnext lane= " << next_lane
               << std::endl;
-  }
+  }*/
   this->state = next_state;
   return next_lane;
 }
@@ -333,7 +334,7 @@ bool Vehicle::get_vehicle_ahead(const nlohmann::json &predictions, int lane,
   }
   return found_vehicle;
 }
-
+#ifdef SIM
 vector<Vehicle> Vehicle::generate_predictions(int horizon) {
   // Generates predictions for non-ego vehicles to be used in trajectory
   //   generation for the ego vehicle.
@@ -360,7 +361,7 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
   this->v = next_state.v;
   this->a = next_state.a;
 }
-
+#endif
 void Vehicle::configure(int num_lanes, int width, float speed_limit,
                         float accel_limit, double max_s) {
   // Called by simulator before simulation begins. Sets various parameters which

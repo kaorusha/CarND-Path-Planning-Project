@@ -1,6 +1,6 @@
 #ifndef VEHICLE_H
 #define VEHICLE_H
-
+//#define SIM
 #include <map>
 #include <string>
 #include <vector>
@@ -73,11 +73,11 @@ class Vehicle {
   bool get_vehicle_behind(const nlohmann::json &predictions, int lane, int &id);
 
   bool get_vehicle_ahead(const nlohmann::json &predictions, int lane, int &id);
-
+#ifdef SIM
   vector<Vehicle> generate_predictions(int horizon = 2);
 
   void realize_next_state(vector<Vehicle> &trajectory);
-
+#endif
   void configure(int num_lanes, int lane_width, float speed_limit,
                  float accel_limit, double max_s);
 
@@ -89,8 +89,6 @@ class Vehicle {
 
   map<string, int> lane_direction = {
       {"PLCL", -1}, {"LCL", -1}, {"LCR", 1}, {"PLCR", 1}};
-
-  int L = 1;
 
   float preferred_buffer;  // impacts "keep lane" behavior.
 

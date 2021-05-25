@@ -17,6 +17,7 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 #define toM_S 0.44704
+//#define DEBUG
 
 Eigen::Vector2d translation(const vector<double> &trans,
                             Eigen::Vector2d input) {
@@ -190,7 +191,7 @@ int main() {
           double target_d = (double)(4 * ego.goal_lane + 2);
           for (unsigned int i = 1; i < 4; ++i) {
             vector<double> map_waypoint_plus_lane =
-                getXY(car_s + 30.0 * i, target_d, map_waypoints_s,
+                getXY(car_s + 40.0 * i, target_d, map_waypoints_s,
                       map_waypoints_x, map_waypoints_y);
             Xs.push_back(map_waypoint_plus_lane[0]);
             Ys.push_back(map_waypoint_plus_lane[1]);
@@ -216,28 +217,53 @@ int main() {
                                  s(Xs[1] + next_waypoint_s));
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
           // x_delta will be less for busy traffic and lower lane speed
-          float acc_limit;
           float velocity_limit;
-          if (ego.state == "LCR" || ego.state == "RCR") {
-            acc_limit = ego.max_acceleration * 0.8;
-            velocity_limit = ego.target_speed * 0.8;
-          } else {
-            acc_limit = ego.max_acceleration;
+          if (ego.state == "KL")
             velocity_limit = ego.target_speed;
-          }
+          else
+            velocity_limit = ego.lane_speed;
           next_x = Xs[1];
+#ifdef DEBUG
+          next_y = Ys[1];
+          float last_v, last_a;
+#endif
           for (unsigned int i = 0; i < 50 - previous_path_size; ++i) {
+            // update x_delta inside the loop
             if (too_close || ego.cmd_vel > velocity_limit) {
-              ego.cmd_vel -= acc_limit * loop_t;
+              ego.cmd_vel -= ego.max_acceleration * loop_t;
             } else if (ego.cmd_vel < velocity_limit)
-              ego.cmd_vel += acc_limit * loop_t;
+              ego.cmd_vel += ego.max_acceleration * loop_t;
             double x_delta =
                 next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));
             if (x_delta < 0) {
               std::cout << "x_delta < 0: " << x_delta << std::endl;
               x_delta = 0.001;
             }
+            // update next_x
             next_x += x_delta;
+#ifdef DEBUG
+            // check the vel
+            float v, a, jerk;
+
+            v = sqrt(x_delta * x_delta +
+                     (s(next_x) - next_y) * (s(next_x) - next_y)) /
+                0.02;
+            if (v > 50 * toM_S)
+              std::cout << "state " << ego.state << "\tat " << i << "\tv= " << v
+                        << std::endl;
+            if (i > 0) {
+              a = (v - last_v) / 0.02;
+              if (a > 10)
+                std::cout << "state " << ego.state << "\tat " << i
+                          << "\ta= " << a << std::endl;
+            }
+            /*if (i > 1) {
+              jerk = (a - last_a) / 0.02;
+              if (jerk > 10) std::cout << "jerk exceed: " << jerk << std::endl;
+            }*/
+            last_v = v;
+            last_a = a;
+#endif
             // find corresponded y in spline
             next_y = s(next_x);
             // transfer from local coordinate to map coordinate

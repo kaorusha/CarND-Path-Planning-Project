@@ -15,7 +15,7 @@ using std::vector;
  */
 const float REACH_GOAL = 0;
 const float EFFICIENCY = 100;
-const float OFF_ROAD = 200;
+const float OFF_ROAD = 100;
 const float CHANGE_LANE = 10;
 
 // Here we have provided two possible suggestions for cost functions, but feel
