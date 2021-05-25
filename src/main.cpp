@@ -186,6 +186,8 @@ int main() {
             Ys.push_back(car_y - sin(deg2rad(car_yaw)));
             Ys.push_back(car_y);
             yaw_rad = deg2rad(car_yaw);
+            // no previous path
+            end_path_s = car_s;
           }
           // rest point using map waypoints which is 30m apart in s in Frenet
           // coordinate
@@ -193,7 +195,7 @@ int main() {
           double target_d = (double)(4 * ego.goal_lane + 2);
           for (unsigned int i = 1; i < 4; ++i) {
             vector<double> map_waypoint_plus_lane =
-                getXY(car_s + 40.0 * i, target_d, map_waypoints_s,
+                getXY(end_path_s + 30.0 * i, target_d, map_waypoints_s,
                       map_waypoints_x, map_waypoints_y);
             Xs.push_back(map_waypoint_plus_lane[0]);
             Ys.push_back(map_waypoint_plus_lane[1]);
