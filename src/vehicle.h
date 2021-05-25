@@ -77,15 +77,15 @@ class Vehicle {
   vector<Vehicle> generate_predictions(int horizon = 2);
 
   void realize_next_state(vector<Vehicle> &trajectory);
-#endif
-  void configure(int num_lanes, int lane_width, float speed_limit,
-                 float accel_limit, double max_s);
 
   // public Vehicle variables
   struct collider {
     bool collision;  // is there a collision?
     int time;        // time collision happens
   };
+#endif
+  void configure(int num_lanes, int lane_width, float speed_limit,
+                 float accel_limit, double max_s);
 
   map<string, int> lane_direction = {
       {"PLCL", -1}, {"LCL", -1}, {"LCR", 1}, {"PLCR", 1}};

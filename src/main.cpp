@@ -123,14 +123,16 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
-          /*
+#ifdef DEBUG
           std::cout << std::setprecision(5) << "x\ty\tyaw\ts\td\tspeed\n"
                     << car_x << "\t" << car_y << "\t" << car_yaw << "\t"
                     << car_s << "\t" << car_d << "\t" << car_speed << std::endl;
-          */
+#endif
           const double loop_t = 0.02;  // sec
           ego.last_update_time += (float)loop_t;
           ego.update(car_s, car_d, car_speed * toM_S, loop_t);
+          // wait until finishing lane changing and avoid changing behavior
+          // frequently
           if ((ego.goal_lane < 0 || ego.goal_lane == ego.lane) &&
               ego.last_update_time > 0.2) {
             ego.goal_lane = ego.choose_next_state(sensor_fusion);
@@ -196,8 +198,10 @@ int main() {
             Xs.push_back(map_waypoint_plus_lane[0]);
             Ys.push_back(map_waypoint_plus_lane[1]);
           }
-          // printVector("Xs= ", Xs);
-          // printVector("Ys= ", Ys);
+#ifdef DEBUG
+          printVector("Xs= ", Xs);
+          printVector("Ys= ", Ys);
+#endif
           // transfer to local coordinate
           double x_trans = Xs[0];
           double y_trans = Ys[0];
@@ -207,8 +211,10 @@ int main() {
             Xs[i] = local_pose(0);
             Ys[i] = local_pose(1);
           }
-          // printVector("Xs= ", Xs);
-          // printVector("Ys= ", Ys);
+#ifdef DEBUG
+          printVector("Xs= ", Xs);
+          printVector("Ys= ", Ys);
+#endif
           // create spline
           tk::spline s(Xs, Ys);
           double spline_dist, next_x, next_y;
