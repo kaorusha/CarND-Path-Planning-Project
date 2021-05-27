@@ -76,6 +76,7 @@ Using following parameters for calculating velocity. (`main.cpp` line #54 to #55
 * `accel_limit` is 50% of 10m/s^2 as we are using straight distance between waypoints but the true distance traveled is longer within 0.02 time step so the corresponding kinematics will be larger.
 * `Vehicle::lane_speed` is the speed of the vehicle ahead on the lane. (`vehicle.cpp` line #112)
 * `Vehicle::preferred_buffer` is the safe distance between other vehicles. (`vehicle.cpp` line #43)
+
 Two steps to determine the velocity 
 ##### too close?
 On each update loop, if the **future distance** with the vehicle ahead is less than `Vehicle::preferred_buffer`, `too_close` will set to true to enable decelerating. (`main.cpp` line #141 to #160). The position of next update step is predicted by assuming all vehicle is moving with continuous velocity, because the time step is as small as (0.02sec).
@@ -114,7 +115,7 @@ vehicle_ahead_future_position = vehicle_ahead_s + vehicle_ahead_velocity * t
 ego_future_position = vehicle_ahead_future_position - preferred_buffer;
 ego_velocity * t = ego_future_position - ego_s - 1/2 * ego_acceleration * t^2
 ``` 
-3. If found vehicles both ahead and behind, follow the velocity of vehicles ahead(must travel at the speed of traffic, regardless of preferred buffer).
+3. If found vehicles both ahead and behind, follow the velocity of vehicles ahead (must travel at the speed of traffic, regardless of preferred buffer).
 #### behavior for state
 trajectory is vector of 2 `Vehicle` object with vehicle's position, velocity, and acceleration.
 ```cpp
