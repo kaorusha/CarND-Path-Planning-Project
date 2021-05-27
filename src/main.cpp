@@ -193,10 +193,11 @@ int main() {
           // coordinate
           // push another 3 point for spline creating
           double target_d = (double)(4 * ego.goal_lane + 2);
+          double next_waypoint_s = 30.0;
           for (unsigned int i = 1; i < 4; ++i) {
             vector<double> map_waypoint_plus_lane =
-                getXY(end_path_s + 30.0 * i, target_d, map_waypoints_s,
-                      map_waypoints_x, map_waypoints_y);
+                getXY(end_path_s + next_waypoint_s * i, target_d,
+                      map_waypoints_s, map_waypoints_x, map_waypoints_y);
             Xs.push_back(map_waypoint_plus_lane[0]);
             Ys.push_back(map_waypoint_plus_lane[1]);
           }
@@ -220,9 +221,9 @@ int main() {
           // create spline
           tk::spline s(Xs, Ys);
           double spline_dist, next_x, next_y;
-          double next_waypoint_s = 30.0;
-          spline_dist = distance(Xs[1], Ys[1], Xs[1] + next_waypoint_s,
-                                 s(Xs[1] + next_waypoint_s));
+          double next_waypoint_x = 30.0;
+          spline_dist = distance(Xs[1], Ys[1], Xs[1] + next_waypoint_x,
+                                 s(Xs[1] + next_waypoint_x));
           // 50 MPH for 0.02 second is 0.447 meter, use 99% and get 0.443 meter
           // x_delta will be less for busy traffic and lower lane speed
           float velocity_limit;
@@ -242,7 +243,7 @@ int main() {
             } else if (ego.cmd_vel < velocity_limit)
               ego.cmd_vel += ego.max_acceleration * loop_t;
             double x_delta =
-                next_waypoint_s / (spline_dist / (ego.cmd_vel * loop_t));
+                next_waypoint_x / (spline_dist / (ego.cmd_vel * loop_t));
             if (x_delta < 0) {
               std::cout << "x_delta < 0: " << x_delta << std::endl;
               x_delta = 0.001;

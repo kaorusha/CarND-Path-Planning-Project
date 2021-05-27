@@ -43,6 +43,14 @@ void Vehicle::update(double car_s, double car_d, double car_v, double loop_t) {
   this->preferred_buffer = 0.5 * car_v * 3600 / 1000;
 }
 
+void printVector(const string msg, const vector<double> &v) {
+  std::cout << msg;
+  for (unsigned int i = 0; i < v.size(); ++i) {
+    std::cout << std::setprecision(10) << v[i] << "\t";
+  }
+  std::cout << std::endl;
+}
+
 void printVector(const string msg, const vector<float> &v) {
   std::cout << msg;
   for (unsigned int i = 0; i < v.size(); ++i) {

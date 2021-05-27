@@ -102,4 +102,8 @@ class Vehicle {
   float last_update_time;
 };
 
+void printVector(const string msg, const vector<double> &v);
+void printVector(const string msg, const vector<float> &v);
+void printVector(const string msg, const vector<string> &v);
+
 #endif  // VEHICLE_H
